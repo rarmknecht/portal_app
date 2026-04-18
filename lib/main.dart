@@ -6,11 +6,15 @@ import 'services/prefs_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.portal.portal_app.audio',
-    androidNotificationChannelName: 'Portal Audio',
-    androidNotificationOngoing: true,
-  );
+  // If audio background init fails (missing service declaration, old Android, etc.)
+  // we still launch the app — audio background simply won't work.
+  try {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.portal.portal_app.audio',
+      androidNotificationChannelName: 'Portal Audio',
+      androidNotificationOngoing: true,
+    );
+  } catch (_) {}
 
   final prefs = await PrefsService.create();
   runApp(PortalApp(prefs: prefs));
