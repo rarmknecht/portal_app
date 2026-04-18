@@ -1,0 +1,52 @@
+import 'package:dio/dio.dart';
+import 'models.dart';
+
+class AgentClient {
+  final String baseUrl;
+  final Dio _dio;
+
+  AgentClient(this.baseUrl)
+      : _dio = Dio(BaseOptions(
+          baseUrl: '$baseUrl/api/v1',
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 10),
+        ));
+
+  Future<bool> health() async {
+    try {
+      final res = await _dio.get('/health');
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<Library>> libraries() async {
+    final res = await _dio.get('/libraries');
+    final list = res.data['libraries'] as List;
+    return list.map((e) => Library.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<DirEntry>> browse(String path) async {
+    final res = await _dio.get('/browse', queryParameters: {'path': path});
+    final list = res.data['entries'] as List;
+    return list.map((e) => DirEntry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<MediaMetadata> metadata(String path) async {
+    final res = await _dio.get('/metadata', queryParameters: {'path': path});
+    return MediaMetadata.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<List<DirEntry>> search(String library, String query) async {
+    final res = await _dio.get('/search', queryParameters: {'library': library, 'q': query});
+    final list = res.data['results'] as List;
+    return list.map((e) => DirEntry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  String thumbnailUrl(String path, {int size = 320}) =>
+      '$baseUrl/api/v1/thumbnail?path=${Uri.encodeQueryComponent(path)}&size=$size';
+
+  String streamUrl(String path) =>
+      '$baseUrl/api/v1/stream?path=${Uri.encodeQueryComponent(path)}';
+}
