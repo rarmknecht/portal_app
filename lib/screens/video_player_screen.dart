@@ -229,33 +229,36 @@ class _Controls extends StatelessWidget {
                 ),
               ],
             ),
-            Column(children: [
-              VideoProgressIndicator(
-                controller,
-                allowScrubbing: true,
-                colors: const VideoProgressColors(playedColor: Colors.white),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(fmt(pos), style: const TextStyle(color: Colors.white)),
-                    IconButton(
-                      icon: Icon(
-                        controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: Colors.white,
-                        size: 36,
-                      ),
-                      onPressed: () => controller.value.isPlaying
-                          ? controller.pause()
-                          : controller.play(),
-                    ),
-                    Text(fmt(dur), style: const TextStyle(color: Colors.white)),
-                  ],
+            SafeArea(
+              top: false,
+              child: Column(children: [
+                VideoProgressIndicator(
+                  controller,
+                  allowScrubbing: true,
+                  colors: const VideoProgressColors(playedColor: Colors.white),
                 ),
-              ),
-            ]),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(fmt(pos), style: const TextStyle(color: Colors.white)),
+                      IconButton(
+                        icon: Icon(
+                          controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: Colors.white,
+                          size: 36,
+                        ),
+                        onPressed: () => controller.value.isPlaying
+                            ? controller.pause()
+                            : controller.play(),
+                      ),
+                      Text(fmt(dur), style: const TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
           ],
         ),
       ),
