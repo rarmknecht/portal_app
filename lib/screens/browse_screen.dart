@@ -26,31 +26,39 @@ class BrowseScreen extends StatefulWidget {
 }
 
 class _BrowseScreenState extends State<BrowseScreen> {
-  late Future<List<DirEntry>> _entries;
+  List<DirEntry> _entries = [];
+  bool _loading = true;
+  String? _error;
   String _sortOrder = 'name';
+
+  // All non-folder items in the current view, in display order.
+  List<DirEntry> get _mediaItems => _entries.where((e) => e.isMedia).toList();
 
   @override
   void initState() {
     super.initState();
     _sortOrder = widget.prefs.sortOrder;
-    _entries = _load();
+    _load();
   }
 
-  Future<List<DirEntry>> _load() async {
-    final entries = await widget.client.browse(widget.path);
-    return _sort(entries);
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final raw = await widget.client.browse(widget.path);
+      if (mounted) setState(() { _entries = _sort(raw); _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = '$e'; _loading = false; });
+    }
   }
 
   List<DirEntry> _sort(List<DirEntry> entries) {
     final folders = entries.where((e) => e.isFolder).toList();
     final files = entries.where((e) => !e.isFolder).toList();
-
     int compare(DirEntry a, DirEntry b) => switch (_sortOrder) {
       'date' => b.mtime.compareTo(a.mtime),
       'size' => (b.size ?? 0).compareTo(a.size ?? 0),
       _ => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     };
-
     folders.sort(compare);
     files.sort(compare);
     return [...folders, ...files];
@@ -60,31 +68,33 @@ class _BrowseScreenState extends State<BrowseScreen> {
     widget.prefs.saveSortOrder(order);
     setState(() {
       _sortOrder = order;
-      _entries = _load();
+      _entries = _sort(_entries);
     });
   }
 
   void _open(DirEntry entry) {
     if (entry.isFolder) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BrowseScreen(
-            client: widget.client,
-            prefs: widget.prefs,
-            path: entry.path,
-            title: entry.name,
-          ),
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => BrowseScreen(
+          client: widget.client,
+          prefs: widget.prefs,
+          path: entry.path,
+          title: entry.name,
         ),
-      );
+      ));
       return;
     }
+
+    final siblings = _mediaItems;
+    final index = siblings.indexWhere((e) => e.path == entry.path);
+
     switch (entry.type) {
       case 'video':
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => VideoPlayerScreen(
-            url: widget.client.streamUrl(entry.path),
-            title: entry.name,
+            siblings: siblings,
+            initialIndex: index < 0 ? 0 : index,
+            streamUrlBuilder: widget.client.streamUrl,
           ),
         ));
       case 'audio':
@@ -97,8 +107,9 @@ class _BrowseScreenState extends State<BrowseScreen> {
       case 'photo':
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => PhotoViewerScreen(
-            url: widget.client.streamUrl(entry.path),
-            title: entry.name,
+            siblings: siblings,
+            initialIndex: index < 0 ? 0 : index,
+            streamUrlBuilder: widget.client.streamUrl,
           ),
         ));
     }
@@ -121,43 +132,29 @@ class _BrowseScreenState extends State<BrowseScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<DirEntry>>(
-        future: _entries,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.error_outline, size: 48),
-                const SizedBox(height: 12),
-                Text('${snap.error}'),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => setState(() => _entries = _load()),
-                  child: const Text('Retry'),
-                ),
-              ]),
-            );
-          }
-          final entries = snap.data!;
-          if (entries.isEmpty) {
-            return const Center(child: Text('Empty folder'));
-          }
-          return ListView.builder(
-            itemCount: entries.length,
-            itemBuilder: (context, i) {
-              final e = entries[i];
-              return MediaTile(
-                entry: e,
-                thumbnailUrl: e.isMedia ? widget.client.thumbnailUrl(e.path) : null,
-                onTap: () => _open(e),
-              );
-            },
-          );
-        },
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.error_outline, size: 48),
+                  const SizedBox(height: 12),
+                  Text(_error!),
+                  const SizedBox(height: 12),
+                  FilledButton(onPressed: _load, child: const Text('Retry')),
+                ]))
+              : _entries.isEmpty
+                  ? const Center(child: Text('Empty folder'))
+                  : ListView.builder(
+                      itemCount: _entries.length,
+                      itemBuilder: (context, i) {
+                        final e = _entries[i];
+                        return MediaTile(
+                          entry: e,
+                          thumbnailUrl: e.isMedia ? widget.client.thumbnailUrl(e.path) : null,
+                          onTap: () => _open(e),
+                        );
+                      },
+                    ),
     );
   }
 }
