@@ -18,6 +18,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   final _discovery = DiscoveryService();
   final _hostController = TextEditingController();
   final _portController = TextEditingController(text: '7842');
+  final _tokenController = TextEditingController();
 
   List<AgentInfo> _found = [];
   bool _scanning = false;
@@ -36,7 +37,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     final saved = widget.prefs.savedAgent;
     if (saved == null) return;
     try {
-      final ok = await AgentClient(saved.baseUrl)
+      final ok = await AgentClient(saved.baseUrl, token: saved.token)
           .health()
           .timeout(const Duration(seconds: 3));
       if (ok && mounted) _navigate(saved);
@@ -63,14 +64,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   Future<void> _connectManual() async {
     final host = _hostController.text.trim();
     final port = int.tryParse(_portController.text.trim()) ?? 7842;
+    final token = _tokenController.text.trim();
     if (host.isEmpty) {
       setState(() => _connectError = 'Enter a host or IP address.');
       return;
     }
     setState(() { _connecting = true; _connectError = null; });
     try {
-      final agent = AgentInfo(host: host, port: port);
-      final ok = await AgentClient(agent.baseUrl)
+      final agent = AgentInfo(host: host, port: port, token: token);
+      final ok = await AgentClient(agent.baseUrl, token: agent.token)
           .health()
           .timeout(const Duration(seconds: 5));
       if (!mounted) return;
@@ -87,13 +89,59 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
   }
 
+  Future<AgentInfo?> _promptToken(AgentInfo base) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<AgentInfo>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(base.host),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Enter the server token, or leave blank if not set.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Token (optional)',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => Navigator.pop(
+                ctx,
+                AgentInfo(host: base.host, port: base.port, token: ctrl.text.trim()),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              ctx,
+              AgentInfo(host: base.host, port: base.port, token: ctrl.text.trim()),
+            ),
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return result;
+  }
+
   void _navigate(AgentInfo agent) {
     _discovery.stop();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => LibraryListScreen(
-          client: AgentClient(agent.baseUrl),
+          client: AgentClient(agent.baseUrl, token: agent.token),
           prefs: widget.prefs,
           agentInfo: agent,
         ),
@@ -106,6 +154,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     _discovery.stop();
     _hostController.dispose();
     _portController.dispose();
+    _tokenController.dispose();
     super.dispose();
   }
 
@@ -141,8 +190,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 subtitle: Text('Port ${a.port}'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () async {
-                  await widget.prefs.saveAgent(a);
-                  if (mounted) _navigate(a);
+                  final agent = await _promptToken(a);
+                  if (agent == null || !mounted) return;
+                  await widget.prefs.saveAgent(agent);
+                  if (mounted) _navigate(agent);
                 },
               ),
             )),
@@ -177,11 +228,23 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
+                textInputAction: TextInputAction.next,
                 onSubmitted: (_) => _connectManual(),
               ),
             ),
           ]),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _tokenController,
+            decoration: const InputDecoration(
+              labelText: 'Token (optional)',
+              hintText: 'Leave blank if server has no token set',
+              border: OutlineInputBorder(),
+            ),
+            obscureText: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _connectManual(),
+          ),
 
           if (_connectError != null) ...[
             const SizedBox(height: 10),

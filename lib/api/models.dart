@@ -1,17 +1,35 @@
+import 'dart:convert';
+
 class AgentInfo {
   final String host;
   final int port;
+  final String token;
 
-  const AgentInfo({required this.host, required this.port});
+  const AgentInfo({required this.host, required this.port, this.token = ''});
 
   String get baseUrl => 'http://$host:$port';
 
   factory AgentInfo.fromPrefs(String stored) {
-    final parts = stored.split(':');
-    return AgentInfo(host: parts[0], port: int.parse(parts[1]));
+    try {
+      final j = jsonDecode(stored) as Map<String, dynamic>;
+      return AgentInfo(
+        host: j['host'] as String,
+        port: j['port'] as int,
+        token: (j['token'] as String?) ?? '',
+      );
+    } catch (_) {
+      // Legacy "host:port" format — use lastIndexOf to handle IPv6 addresses.
+      final idx = stored.lastIndexOf(':');
+      if (idx < 0) return AgentInfo(host: stored, port: 7842);
+      return AgentInfo(
+        host: stored.substring(0, idx),
+        port: int.tryParse(stored.substring(idx + 1)) ?? 7842,
+      );
+    }
   }
 
-  String toPrefsString() => '$host:$port';
+  String toPrefsString() =>
+      jsonEncode({'host': host, 'port': port, 'token': token});
 }
 
 class Library {

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../api/agent_client.dart';
 import '../api/models.dart';
@@ -30,7 +31,12 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
     _libraries = widget.client.libraries();
   }
 
-  void _disconnect() {
+  bool _is401(Object? error) =>
+      error is DioException && error.response?.statusCode == 401;
+
+  Future<void> _disconnect() async {
+    await widget.prefs.clearAgent();
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => DiscoveryScreen(prefs: widget.prefs)),
@@ -43,7 +49,11 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
       appBar: AppBar(
         title: Text('Libraries — ${widget.agentInfo.host}'),
         actions: [
-          IconButton(icon: const Icon(Icons.logout), tooltip: 'Disconnect', onPressed: _disconnect),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Disconnect',
+            onPressed: _disconnect,
+          ),
         ],
       ),
       body: FutureBuilder<List<Library>>(
@@ -53,21 +63,43 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
+            final auth = _is401(snap.error);
             return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.wifi_off, size: 48),
-                  const SizedBox(height: 16),
-                  Text('Could not reach agent', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text('${snap.error}', style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: () => setState(() => _libraries = widget.client.libraries()),
-                    child: const Text('Retry'),
-                  ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      auth ? Icons.lock_outline : Icons.wifi_off,
+                      size: 48,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      auth ? 'Token required' : 'Could not reach agent',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      auth
+                          ? 'The server rejected the request (401). '
+                            'Disconnect and reconnect with the correct token.'
+                          : '${snap.error}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: auth
+                          ? _disconnect
+                          : () => setState(
+                                () => _libraries = widget.client.libraries(),
+                              ),
+                      child: Text(auth ? 'Reconnect' : 'Retry'),
+                    ),
+                  ],
+                ),
               ),
             );
           }
@@ -82,7 +114,6 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
               return ListTile(
                 leading: const Icon(Icons.folder_open, size: 36),
                 title: Text(lib.name),
-                subtitle: Text(lib.path, style: Theme.of(context).textTheme.bodySmall),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   widget.prefs.saveLastLibrary(lib.path);

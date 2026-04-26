@@ -3,14 +3,28 @@ import 'models.dart';
 
 class AgentClient {
   final String baseUrl;
+  final String token;
   final Dio _dio;
 
-  AgentClient(this.baseUrl)
-      : _dio = Dio(BaseOptions(
-          baseUrl: '$baseUrl/api/v1',
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 10),
-        ));
+  AgentClient(this.baseUrl, {this.token = ''})
+      : _dio = _buildDio(baseUrl, token);
+
+  static Dio _buildDio(String baseUrl, String token) {
+    final dio = Dio(BaseOptions(
+      baseUrl: '$baseUrl/api/v1',
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 30),
+    ));
+    if (token.isNotEmpty) {
+      dio.interceptors.add(InterceptorsWrapper(
+        onRequest: (options, handler) {
+          options.headers['Authorization'] = 'Bearer $token';
+          handler.next(options);
+        },
+      ));
+    }
+    return dio;
+  }
 
   Future<bool> health() async {
     try {
@@ -44,9 +58,15 @@ class AgentClient {
     return list.map((e) => DirEntry.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  String thumbnailUrl(String path, {int size = 320}) =>
-      '$baseUrl/api/v1/thumbnail?path=${Uri.encodeQueryComponent(path)}&size=$size';
+  String thumbnailUrl(String path, {int size = 320}) {
+    var url = '$baseUrl/api/v1/thumbnail?path=${Uri.encodeQueryComponent(path)}&size=$size';
+    if (token.isNotEmpty) url += '&token=${Uri.encodeQueryComponent(token)}';
+    return url;
+  }
 
-  String streamUrl(String path) =>
-      '$baseUrl/api/v1/stream?path=${Uri.encodeQueryComponent(path)}';
+  String streamUrl(String path) {
+    var url = '$baseUrl/api/v1/stream?path=${Uri.encodeQueryComponent(path)}';
+    if (token.isNotEmpty) url += '&token=${Uri.encodeQueryComponent(token)}';
+    return url;
+  }
 }

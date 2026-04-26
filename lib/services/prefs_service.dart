@@ -26,6 +26,8 @@ class PrefsService {
   Future<void> saveAgent(AgentInfo agent) =>
       _prefs.setString(_kAgent, agent.toPrefsString());
 
+  Future<void> clearAgent() => _prefs.remove(_kAgent);
+
   String? get lastLibraryPath => _prefs.getString(_kLastLibrary);
   Future<void> saveLastLibrary(String path) => _prefs.setString(_kLastLibrary, path);
 
