@@ -15,7 +15,6 @@ Portal is the Android companion app for the [portal](https://github.com/rarmknec
 - **Video** — hardware-accelerated streaming via ExoPlayer
 - **Audio** — background playback with lock-screen controls
 - **Photos** — pinch-zoom viewer with swipe navigation through the folder
-- **Search** — filename search within any library
 
 ---
 

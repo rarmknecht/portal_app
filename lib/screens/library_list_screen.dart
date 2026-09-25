@@ -34,6 +34,8 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
   bool _is401(Object? error) =>
       error is DioException && error.response?.statusCode == 401;
 
+  void _refresh() => setState(() => _libraries = widget.client.libraries());
+
   /// Back to the discovery screen. The connection stays saved as a tile;
   /// only the auto-resume pointer is cleared so the screen actually shows.
   Future<void> _disconnect() async {
@@ -87,17 +89,13 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                       auth
                           ? 'The server rejected the request (401). '
                             'Go back and use "Edit token" on the saved connection.'
-                          : '${snap.error}',
+                          : AgentClient.describeError(snap.error),
                       style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
                     FilledButton(
-                      onPressed: auth
-                          ? _disconnect
-                          : () => setState(
-                                () => _libraries = widget.client.libraries(),
-                              ),
+                      onPressed: auth ? _disconnect : _refresh,
                       child: Text(auth ? 'Reconnect' : 'Retry'),
                     ),
                   ],
@@ -117,9 +115,8 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                 leading: const Icon(Icons.folder_open, size: 36),
                 title: Text(lib.name),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  widget.prefs.saveLastLibrary(lib.path);
-                  Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => BrowseScreen(
@@ -127,9 +124,13 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                         prefs: widget.prefs,
                         path: lib.path,
                         title: lib.name,
+                        crumbs: [lib.name],
                       ),
                     ),
                   );
+                  // Library tokens may have rotated while browsing; refetch
+                  // so the next tap starts from fresh ones.
+                  if (mounted) _refresh();
                 },
               );
             },

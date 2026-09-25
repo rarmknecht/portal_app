@@ -7,7 +7,6 @@ import '../api/models.dart';
 // Current keys.
 const _kConnections = 'connections'; // JSON list of {scheme, host, port}
 const _kLast = 'last_connection'; // id of the connection to auto-resume
-const _kLastLibrary = 'last_library';
 const _kSortOrder = 'sort_order';
 const _kViewMode = 'view_mode';
 const _kTokenPrefix = 'token:'; // secure store key = prefix + connection id
@@ -181,9 +180,6 @@ class PrefsService {
       );
 
   // ── Browsing preferences ────────────────────────────────────────────
-
-  String? get lastLibraryPath => _prefs.getString(_kLastLibrary);
-  Future<void> saveLastLibrary(String path) => _prefs.setString(_kLastLibrary, path);
 
   String get sortOrder => _prefs.getString(_kSortOrder) ?? 'name';
   Future<void> saveSortOrder(String order) => _prefs.setString(_kSortOrder, order);

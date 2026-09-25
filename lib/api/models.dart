@@ -1,5 +1,14 @@
 import 'dart:convert';
 
+/// A name in a saved trail (library or folder) that no longer exists.
+class PathGoneException implements Exception {
+  final String name;
+  const PathGoneException(this.name);
+
+  @override
+  String toString() => 'PathGoneException($name)';
+}
+
 class AgentInfo {
   final String scheme; // http | https
   final String host;

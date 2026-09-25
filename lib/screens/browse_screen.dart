@@ -10,8 +10,15 @@ import 'photo_viewer_screen.dart';
 class BrowseScreen extends StatefulWidget {
   final AgentClient client;
   final PrefsService prefs;
+
+  /// Path token for this folder as last known. Tokens rotate when the
+  /// server restarts, so the screen may replace it via [crumbs].
   final String path;
   final String title;
+
+  /// Names from the library root to here: [libraryName, folder, ...].
+  /// Used to find this folder again when [path] has gone stale.
+  final List<String> crumbs;
 
   const BrowseScreen({
     super.key,
@@ -19,6 +26,7 @@ class BrowseScreen extends StatefulWidget {
     required this.prefs,
     required this.path,
     required this.title,
+    required this.crumbs,
   });
 
   @override
@@ -26,6 +34,7 @@ class BrowseScreen extends StatefulWidget {
 }
 
 class _BrowseScreenState extends State<BrowseScreen> {
+  late String _path = widget.path;
   List<DirEntry> _entries = [];
   bool _loading = true;
   String? _error;
@@ -43,14 +52,37 @@ class _BrowseScreenState extends State<BrowseScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+  /// Fetch this folder. With [quiet], keep showing the current entries
+  /// while the request is in flight (used when returning from a player).
+  Future<void> _load({bool quiet = false}) async {
+    if (!quiet) setState(() { _loading = true; _error = null; });
     try {
-      final raw = await widget.client.browse(widget.path);
-      if (mounted) setState(() { _entries = _sort(raw); _loading = false; });
+      final raw = await _browseWithRecovery();
+      if (mounted) setState(() { _entries = _sort(raw); _loading = false; _error = null; });
     } catch (e) {
-      if (mounted) setState(() { _error = '$e'; _loading = false; });
+      if (mounted) setState(() { _error = AgentClient.describeError(e); _loading = false; });
     }
+  }
+
+  /// Browse [_path]; if the server no longer knows the token (it restarted
+  /// and re-keyed its registry), re-resolve this folder by name and retry
+  /// once. Any other failure propagates.
+  Future<List<DirEntry>> _browseWithRecovery() async {
+    try {
+      return await widget.client.browse(_path);
+    } catch (e) {
+      if (!AgentClient.isStaleToken(e)) rethrow;
+      _path = await widget.client.resolvePath(widget.crumbs);
+      return widget.client.browse(_path);
+    }
+  }
+
+  /// Push a screen and, once it pops, quietly refresh so any tokens made
+  /// stale by a server restart during playback are replaced before the
+  /// next tap.
+  Future<void> _pushThenRefresh(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (mounted) _load(quiet: true);
   }
 
   List<DirEntry> _sort(List<DirEntry> entries) {
@@ -82,13 +114,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   void _open(DirEntry entry) {
     if (entry.isFolder) {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => BrowseScreen(
-          client: widget.client,
-          prefs: widget.prefs,
-          path: entry.path,
-          title: entry.name,
-        ),
+      _pushThenRefresh(BrowseScreen(
+        client: widget.client,
+        prefs: widget.prefs,
+        path: entry.path,
+        title: entry.name,
+        crumbs: [...widget.crumbs, entry.name],
       ));
       return;
     }
@@ -98,31 +129,25 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
     switch (entry.type) {
       case 'video':
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => VideoPlayerScreen(
-            siblings: siblings,
-            initialIndex: index < 0 ? 0 : index,
-            streamUrlBuilder: widget.client.streamUrl,
-            headers: widget.client.authHeaders,
-          ),
+        _pushThenRefresh(VideoPlayerScreen(
+          siblings: siblings,
+          initialIndex: index < 0 ? 0 : index,
+          streamUrlBuilder: widget.client.streamUrl,
+          headers: widget.client.authHeaders,
         ));
       case 'audio':
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => AudioPlayerScreen(
-            url: widget.client.streamUrl(entry.path),
-            headers: widget.client.authHeaders,
-            mediaId: entry.path,
-            title: entry.name,
-          ),
+        _pushThenRefresh(AudioPlayerScreen(
+          url: widget.client.streamUrl(entry.path),
+          headers: widget.client.authHeaders,
+          mediaId: entry.path,
+          title: entry.name,
         ));
       case 'photo':
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => PhotoViewerScreen(
-            siblings: siblings,
-            initialIndex: index < 0 ? 0 : index,
-            streamUrlBuilder: widget.client.streamUrl,
-            headers: widget.client.authHeaders,
-          ),
+        _pushThenRefresh(PhotoViewerScreen(
+          siblings: siblings,
+          initialIndex: index < 0 ? 0 : index,
+          streamUrlBuilder: widget.client.streamUrl,
+          headers: widget.client.authHeaders,
         ));
     }
   }
@@ -152,13 +177,18 @@ class _BrowseScreenState extends State<BrowseScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.error_outline, size: 48),
-                  const SizedBox(height: 12),
-                  Text(_error!),
-                  const SizedBox(height: 12),
-                  FilledButton(onPressed: _load, child: const Text('Retry')),
-                ]))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.error_outline, size: 48),
+                      const SizedBox(height: 12),
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton(onPressed: _load, child: const Text('Retry')),
+                    ]),
+                  ),
+                )
               : _entries.isEmpty
                   ? const Center(child: Text('Empty folder'))
                   : _viewMode == 'grid'
