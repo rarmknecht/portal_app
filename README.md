@@ -37,6 +37,27 @@ flutter run          # connected device or emulator
 flutter build apk    # release APK → build/app/outputs/flutter-apk/
 ```
 
+### Release builds
+
+Release APKs are signed with a keystore kept **outside** the repository. Create
+one and point `android/key.properties` (gitignored) at it:
+
+```bash
+keytool -genkeypair -keystore ~/.config/portal-app/release-keystore.jks \
+  -storetype PKCS12 -alias portal-release -keyalg RSA -keysize 4096 -validity 10000
+```
+
+```properties
+storeFile=/home/you/.config/portal-app/release-keystore.jks
+storePassword=...
+keyPassword=...
+keyAlias=portal-release
+```
+
+Without `key.properties`, `flutter build apk` falls back to the debug key and
+prints a warning. Back the keystore up: Android will not install an update
+signed with a different key over an existing install.
+
 ---
 
 ## Connecting to your agent
