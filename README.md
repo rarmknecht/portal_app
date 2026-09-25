@@ -27,7 +27,7 @@ Portal is the Android companion app for the [portal](https://github.com/rarmknec
 
 ## Building from source
 
-You need the [Flutter SDK](https://docs.flutter.dev/get-started/install) (Dart 3.11+).
+You need the [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.47 or newer (Dart 3.12+).
 
 ```bash
 git clone https://github.com/rarmknecht/portal-app
@@ -49,9 +49,19 @@ Launch the app. If the portal agent is on the same network, it will appear in th
 
 Tap **Connect manually**, enter the host or IP address and port (default `7842`), and optionally a token. The app remembers the connection for next time.
 
+The host field also accepts a full URL such as `https://portal.example.ts.net`
+or `http://10.0.0.5:7842`. Use an `https://` URL when a TLS-terminating proxy
+(for example Tailscale Serve) fronts the agent; the token then travels only
+inside the encrypted tunnel.
+
 ### Token
 
 If you configured an `api_token` in the portal agent, enter it in the Token field when connecting. Leave it blank if the agent has no token set.
+
+The token is sent as an `Authorization: Bearer` header on every request,
+including video, audio, and thumbnail streams, so it never appears in a URL.
+On the device it is stored in Android Keystore-backed secure storage, and the
+app opts out of Android cloud backup and device-to-device transfer.
 
 ---
 

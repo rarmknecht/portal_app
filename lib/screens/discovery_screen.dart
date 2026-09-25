@@ -62,16 +62,17 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }
 
   Future<void> _connectManual() async {
-    final host = _hostController.text.trim();
-    final port = int.tryParse(_portController.text.trim()) ?? 7842;
-    final token = _tokenController.text.trim();
-    if (host.isEmpty) {
-      setState(() => _connectError = 'Enter a host or IP address.');
+    final agent = AgentInfo.fromUserInput(
+      _hostController.text,
+      _portController.text,
+      token: _tokenController.text.trim(),
+    );
+    if (agent == null) {
+      setState(() => _connectError = 'Enter a host, IP address, or http(s):// URL.');
       return;
     }
     setState(() { _connecting = true; _connectError = null; });
     try {
-      final agent = AgentInfo(host: host, port: port, token: token);
       final ok = await AgentClient(agent.baseUrl, token: agent.token)
           .health()
           .timeout(const Duration(seconds: 5));
@@ -83,7 +84,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         setState(() => _connectError = 'Agent responded but reported an error.');
       }
     } catch (_) {
-      if (mounted) setState(() => _connectError = 'Could not reach $host:$port — is the agent running?');
+      if (mounted) setState(() => _connectError = 'Could not reach ${agent.label} — is the agent running?');
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -111,7 +112,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               ),
               onSubmitted: (_) => Navigator.pop(
                 ctx,
-                AgentInfo(host: base.host, port: base.port, token: ctrl.text.trim()),
+                base.copyWith(token: ctrl.text.trim()),
               ),
             ),
           ],
@@ -124,7 +125,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(
               ctx,
-              AgentInfo(host: base.host, port: base.port, token: ctrl.text.trim()),
+              base.copyWith(token: ctrl.text.trim()),
             ),
             child: const Text('Connect'),
           ),
@@ -209,7 +210,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               child: TextField(
                 controller: _hostController,
                 decoration: const InputDecoration(
-                  labelText: 'Host or IP address',
+                  labelText: 'Host, IP, or https:// URL',
                   hintText: '192.168.1.100',
                   border: OutlineInputBorder(),
                 ),

@@ -7,12 +7,14 @@ class VideoPlayerScreen extends StatefulWidget {
   final List<DirEntry> siblings;
   final int initialIndex;
   final String Function(String path) streamUrlBuilder;
+  final Map<String, String> headers;
 
   const VideoPlayerScreen({
     super.key,
     required this.siblings,
     required this.initialIndex,
     required this.streamUrlBuilder,
+    this.headers = const {},
   });
 
   @override
@@ -52,7 +54,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Future<void> _initPlayer() async {
     setState(() { _initialized = false; _error = null; });
     final url = widget.streamUrlBuilder(_videos[_currentIndex].path);
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(url),
+      httpHeaders: widget.headers,
+    );
     controller.addListener(_onControllerUpdate);
     try {
       await controller.initialize();

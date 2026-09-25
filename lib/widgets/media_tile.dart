@@ -6,12 +6,14 @@ import '../api/models.dart';
 class MediaTile extends StatelessWidget {
   final DirEntry entry;
   final String? thumbnailUrl;
+  final Map<String, String> headers;
   final VoidCallback onTap;
 
   const MediaTile({
     super.key,
     required this.entry,
     this.thumbnailUrl,
+    this.headers = const {},
     required this.onTap,
   });
 
@@ -41,6 +43,7 @@ class MediaTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(4),
       child: CachedNetworkImage(
         imageUrl: thumbnailUrl!,
+        httpHeaders: headers,
         width: 56,
         height: 56,
         fit: BoxFit.cover,

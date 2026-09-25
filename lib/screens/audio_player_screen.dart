@@ -4,16 +4,29 @@ import 'package:just_audio_background/just_audio_background.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final String url;
+  final Map<String, String> headers;
+
+  /// Stable, non-secret identifier for the Android media session. The
+  /// session's metadata is readable by other apps, so it must never be the
+  /// URL with credentials in it.
+  final String mediaId;
   final String title;
 
-  const AudioPlayerScreen({super.key, required this.url, required this.title});
+  const AudioPlayerScreen({
+    super.key,
+    required this.url,
+    required this.mediaId,
+    required this.title,
+    this.headers = const {},
+  });
 
   @override
   State<AudioPlayerScreen> createState() => _AudioPlayerScreenState();
 }
 
 class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
-  final _player = AudioPlayer();
+  // ExoPlayer sends request headers itself; no local proxy needed.
+  final _player = AudioPlayer(useProxyForRequestHeaders: false);
   bool _loading = true;
   String? _error;
 
@@ -28,8 +41,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
       await _player.setAudioSource(
         AudioSource.uri(
           Uri.parse(widget.url),
+          headers: widget.headers.isEmpty ? null : widget.headers,
           tag: MediaItem(
-            id: widget.url,
+            id: widget.mediaId,
             title: widget.title,
           ),
         ),

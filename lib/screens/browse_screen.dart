@@ -95,12 +95,15 @@ class _BrowseScreenState extends State<BrowseScreen> {
             siblings: siblings,
             initialIndex: index < 0 ? 0 : index,
             streamUrlBuilder: widget.client.streamUrl,
+            headers: widget.client.authHeaders,
           ),
         ));
       case 'audio':
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => AudioPlayerScreen(
             url: widget.client.streamUrl(entry.path),
+            headers: widget.client.authHeaders,
+            mediaId: entry.path,
             title: entry.name,
           ),
         ));
@@ -110,6 +113,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
             siblings: siblings,
             initialIndex: index < 0 ? 0 : index,
             streamUrlBuilder: widget.client.streamUrl,
+            headers: widget.client.authHeaders,
           ),
         ));
     }
@@ -151,6 +155,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
                         return MediaTile(
                           entry: e,
                           thumbnailUrl: e.isMedia ? widget.client.thumbnailUrl(e.path) : null,
+                          headers: widget.client.authHeaders,
                           onTap: () => _open(e),
                         );
                       },

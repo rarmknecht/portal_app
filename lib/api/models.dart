@@ -1,35 +1,105 @@
 import 'dart:convert';
 
 class AgentInfo {
+  final String scheme; // http | https
   final String host;
   final int port;
   final String token;
 
-  const AgentInfo({required this.host, required this.port, this.token = ''});
+  static const defaultPort = 7842;
 
-  String get baseUrl => 'http://$host:$port';
+  const AgentInfo({
+    required this.host,
+    required this.port,
+    this.token = '',
+    this.scheme = 'http',
+  });
 
-  factory AgentInfo.fromPrefs(String stored) {
+  String get baseUrl {
+    // Bare IPv6 literals need brackets inside a URL.
+    final h = host.contains(':') && !host.startsWith('[') ? '[$host]' : host;
+    return '$scheme://$h:$port';
+  }
+
+  /// Human-readable host:port without the token.
+  String get label => '$host:$port';
+
+  AgentInfo copyWith({String? token, String? scheme, String? host, int? port}) =>
+      AgentInfo(
+        host: host ?? this.host,
+        port: port ?? this.port,
+        token: token ?? this.token,
+        scheme: scheme ?? this.scheme,
+      );
+
+  /// Build from what a user typed. Accepts a bare host or IP, `host:port`,
+  /// or a full `http://` / `https://` URL (so a TLS-terminating proxy or
+  /// Tailscale Serve can front the agent). [portText] is the separate port
+  /// field; a port embedded in the host text wins over it. Returns null
+  /// when there is no usable host.
+  static AgentInfo? fromUserInput(String hostText, String portText, {String token = ''}) {
+    var text = hostText.trim();
+    if (text.isEmpty) return null;
+    var scheme = 'http';
+    int? port = int.tryParse(portText.trim());
+
+    if (text.contains('://')) {
+      final uri = Uri.tryParse(text);
+      if (uri == null || uri.host.isEmpty) return null;
+      if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+      scheme = uri.scheme;
+      text = uri.host;
+      if (uri.hasPort) {
+        port = uri.port;
+      } else if (port == null || port == defaultPort) {
+        // A URL without an explicit port means the scheme's default port.
+        port = scheme == 'https' ? 443 : 80;
+      }
+    } else {
+      // host:port with a single colon (IPv6 literals have several; leave those alone).
+      final colons = ':'.allMatches(text).length;
+      if (colons == 1) {
+        final idx = text.indexOf(':');
+        final p = int.tryParse(text.substring(idx + 1));
+        if (p != null) {
+          port = p;
+          text = text.substring(0, idx);
+        }
+      }
+      text = text.replaceAll(RegExp(r'^\[|\]$'), '');
+    }
+    final finalPort = port ?? defaultPort;
+    if (finalPort < 1 || finalPort > 65535) return null;
+    return AgentInfo(host: text, port: finalPort, token: token, scheme: scheme);
+  }
+
+  /// Parse the stored form. [token] is supplied by the caller because it is
+  /// kept in secure storage, not alongside host and port.
+  factory AgentInfo.fromPrefs(String stored, {String token = ''}) {
     try {
       final j = jsonDecode(stored) as Map<String, dynamic>;
       return AgentInfo(
         host: j['host'] as String,
         port: j['port'] as int,
-        token: (j['token'] as String?) ?? '',
+        // Legacy records carried the token inline; PrefsService migrates it out.
+        token: token.isNotEmpty ? token : ((j['token'] as String?) ?? ''),
+        scheme: (j['scheme'] as String?) ?? 'http',
       );
     } catch (_) {
       // Legacy "host:port" format — use lastIndexOf to handle IPv6 addresses.
       final idx = stored.lastIndexOf(':');
-      if (idx < 0) return AgentInfo(host: stored, port: 7842);
+      if (idx < 0) return AgentInfo(host: stored, port: defaultPort, token: token);
       return AgentInfo(
         host: stored.substring(0, idx),
-        port: int.tryParse(stored.substring(idx + 1)) ?? 7842,
+        port: int.tryParse(stored.substring(idx + 1)) ?? defaultPort,
+        token: token,
       );
     }
   }
 
+  /// Stored form: never includes the token.
   String toPrefsString() =>
-      jsonEncode({'host': host, 'port': port, 'token': token});
+      jsonEncode({'scheme': scheme, 'host': host, 'port': port});
 }
 
 class Library {

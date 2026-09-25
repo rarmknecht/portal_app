@@ -6,12 +6,14 @@ class PhotoViewerScreen extends StatefulWidget {
   final List<DirEntry> siblings;
   final int initialIndex;
   final String Function(String path) streamUrlBuilder;
+  final Map<String, String> headers;
 
   const PhotoViewerScreen({
     super.key,
     required this.siblings,
     required this.initialIndex,
     required this.streamUrlBuilder,
+    this.headers = const {},
   });
 
   @override
@@ -78,7 +80,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                 final url = widget.streamUrlBuilder(_photos[i].path);
                 return PhotoView(
                   key: ValueKey(url),
-                  imageProvider: NetworkImage(url),
+                  imageProvider: NetworkImage(url, headers: widget.headers),
                   minScale: PhotoViewComputedScale.contained,
                   maxScale: PhotoViewComputedScale.covered * 4,
                   loadingBuilder: (_, event) => Center(

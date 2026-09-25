@@ -9,6 +9,13 @@ class AgentClient {
   AgentClient(this.baseUrl, {this.token = ''})
       : _dio = _buildDio(baseUrl, token);
 
+  /// Headers every request must carry. Media players and image loaders are
+  /// handed bare URLs plus these headers, so the token never appears in a
+  /// URL — URLs end up in the media session, on-disk image caches, and
+  /// player error messages; headers do not.
+  Map<String, String> get authHeaders =>
+      token.isEmpty ? const {} : {'Authorization': 'Bearer $token'};
+
   static Dio _buildDio(String baseUrl, String token) {
     final dio = Dio(BaseOptions(
       baseUrl: '$baseUrl/api/v1',
@@ -58,15 +65,9 @@ class AgentClient {
     return list.map((e) => DirEntry.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  String thumbnailUrl(String path, {int size = 320}) {
-    var url = '$baseUrl/api/v1/thumbnail?path=${Uri.encodeQueryComponent(path)}&size=$size';
-    if (token.isNotEmpty) url += '&token=${Uri.encodeQueryComponent(token)}';
-    return url;
-  }
+  String thumbnailUrl(String path, {int size = 320}) =>
+      '$baseUrl/api/v1/thumbnail?path=${Uri.encodeQueryComponent(path)}&size=$size';
 
-  String streamUrl(String path) {
-    var url = '$baseUrl/api/v1/stream?path=${Uri.encodeQueryComponent(path)}';
-    if (token.isNotEmpty) url += '&token=${Uri.encodeQueryComponent(token)}';
-    return url;
-  }
+  String streamUrl(String path) =>
+      '$baseUrl/api/v1/stream?path=${Uri.encodeQueryComponent(path)}';
 }
