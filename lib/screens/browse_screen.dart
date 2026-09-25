@@ -30,6 +30,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   bool _loading = true;
   String? _error;
   String _sortOrder = 'name';
+  String _viewMode = 'list';
 
   // All non-folder items in the current view, in display order.
   List<DirEntry> get _mediaItems => _entries.where((e) => e.isMedia).toList();
@@ -38,6 +39,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   void initState() {
     super.initState();
     _sortOrder = widget.prefs.sortOrder;
+    _viewMode = widget.prefs.viewMode;
     _load();
   }
 
@@ -70,6 +72,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
       _sortOrder = order;
       _entries = _sort(_entries);
     });
+  }
+
+  void _toggleView() {
+    final mode = _viewMode == 'list' ? 'grid' : 'list';
+    widget.prefs.saveViewMode(mode);
+    setState(() => _viewMode = mode);
   }
 
   void _open(DirEntry entry) {
@@ -125,6 +133,11 @@ class _BrowseScreenState extends State<BrowseScreen> {
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
+          IconButton(
+            icon: Icon(_viewMode == 'list' ? Icons.grid_view : Icons.view_list),
+            tooltip: _viewMode == 'list' ? 'Grid view' : 'List view',
+            onPressed: _toggleView,
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort),
             onSelected: _setSortOrder,
@@ -148,18 +161,41 @@ class _BrowseScreenState extends State<BrowseScreen> {
                 ]))
               : _entries.isEmpty
                   ? const Center(child: Text('Empty folder'))
-                  : ListView.builder(
-                      itemCount: _entries.length,
-                      itemBuilder: (context, i) {
-                        final e = _entries[i];
-                        return MediaTile(
-                          entry: e,
-                          thumbnailUrl: e.isMedia ? widget.client.thumbnailUrl(e.path) : null,
-                          headers: widget.client.authHeaders,
-                          onTap: () => _open(e),
-                        );
-                      },
-                    ),
+                  : _viewMode == 'grid'
+                      ? _grid()
+                      : _list(),
     );
   }
+
+  Widget _list() => ListView.builder(
+        itemCount: _entries.length,
+        itemBuilder: (context, i) {
+          final e = _entries[i];
+          return MediaTile(
+            entry: e,
+            thumbnailUrl: e.isMedia ? widget.client.thumbnailUrl(e.path) : null,
+            headers: widget.client.authHeaders,
+            onTap: () => _open(e),
+          );
+        },
+      );
+
+  Widget _grid() => GridView.builder(
+        padding: const EdgeInsets.all(2),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 140,
+          mainAxisSpacing: 2,
+          crossAxisSpacing: 2,
+        ),
+        itemCount: _entries.length,
+        itemBuilder: (context, i) {
+          final e = _entries[i];
+          return MediaGridTile(
+            entry: e,
+            thumbnailUrl: e.isMedia ? widget.client.thumbnailUrl(e.path) : null,
+            headers: widget.client.authHeaders,
+            onTap: () => _open(e),
+          );
+        },
+      );
 }

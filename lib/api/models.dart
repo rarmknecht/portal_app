@@ -24,6 +24,17 @@ class AgentInfo {
   /// Human-readable host:port without the token.
   String get label => '$host:$port';
 
+  /// Identity of a saved connection: same scheme, host and port. The token
+  /// is deliberately not part of it, so re-entering a token updates the
+  /// existing tile instead of adding a second one.
+  String get id => '$scheme://$host:$port';
+
+  @override
+  bool operator ==(Object other) => other is AgentInfo && other.id == id && other.token == token;
+
+  @override
+  int get hashCode => Object.hash(id, token);
+
   AgentInfo copyWith({String? token, String? scheme, String? host, int? port}) =>
       AgentInfo(
         host: host ?? this.host,

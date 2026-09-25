@@ -8,7 +8,11 @@ import 'library_list_screen.dart';
 class DiscoveryScreen extends StatefulWidget {
   final PrefsService prefs;
 
-  const DiscoveryScreen({super.key, required this.prefs});
+  /// When true, try the last-used connection immediately (app launch).
+  /// After an explicit disconnect the user gets the screen instead.
+  final bool autoResume;
+
+  const DiscoveryScreen({super.key, required this.prefs, this.autoResume = true});
 
   @override
   State<DiscoveryScreen> createState() => _DiscoveryScreenState();
@@ -17,24 +21,25 @@ class DiscoveryScreen extends StatefulWidget {
 class _DiscoveryScreenState extends State<DiscoveryScreen> {
   final _discovery = DiscoveryService();
   final _hostController = TextEditingController();
-  final _portController = TextEditingController(text: '7842');
+  final _portController = TextEditingController(text: '${AgentInfo.defaultPort}');
   final _tokenController = TextEditingController();
 
   List<AgentInfo> _found = [];
   bool _scanning = false;
   bool _connecting = false;
+  String? _connectingId; // which saved tile is being tried, if any
   String? _connectError;
 
   @override
   void initState() {
     super.initState();
     // Fire-and-forget — UI renders immediately regardless of outcome.
-    _tryResumeLastAgent();
+    if (widget.autoResume) _tryResumeLastAgent();
     _startScan();
   }
 
   Future<void> _tryResumeLastAgent() async {
-    final saved = widget.prefs.savedAgent;
+    final saved = widget.prefs.lastConnection;
     if (saved == null) return;
     try {
       final ok = await AgentClient(saved.baseUrl, token: saved.token)
@@ -61,6 +66,31 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     if (mounted) setState(() => _scanning = false);
   }
 
+  /// Health-check [agent]; on success remember it and open it.
+  Future<void> _connect(AgentInfo agent, {String? tileId}) async {
+    setState(() {
+      _connecting = true;
+      _connectingId = tileId;
+      _connectError = null;
+    });
+    try {
+      final ok = await AgentClient(agent.baseUrl, token: agent.token)
+          .health()
+          .timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+      if (ok) {
+        await widget.prefs.saveConnection(agent);
+        if (mounted) _navigate(agent);
+      } else {
+        setState(() => _connectError = 'Agent at ${agent.label} responded but reported an error.');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _connectError = 'Could not reach ${agent.label} — is the agent running?');
+    } finally {
+      if (mounted) setState(() { _connecting = false; _connectingId = null; });
+    }
+  }
+
   Future<void> _connectManual() async {
     final agent = AgentInfo.fromUserInput(
       _hostController.text,
@@ -71,23 +101,32 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       setState(() => _connectError = 'Enter a host, IP address, or http(s):// URL.');
       return;
     }
-    setState(() { _connecting = true; _connectError = null; });
-    try {
-      final ok = await AgentClient(agent.baseUrl, token: agent.token)
-          .health()
-          .timeout(const Duration(seconds: 5));
-      if (!mounted) return;
-      if (ok) {
-        await widget.prefs.saveAgent(agent);
-        _navigate(agent);
-      } else {
-        setState(() => _connectError = 'Agent responded but reported an error.');
-      }
-    } catch (_) {
-      if (mounted) setState(() => _connectError = 'Could not reach ${agent.label} — is the agent running?');
-    } finally {
-      if (mounted) setState(() => _connecting = false);
-    }
+    await _connect(agent);
+  }
+
+  Future<void> _forget(AgentInfo agent) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Forget connection?'),
+        content: Text('${agent.label} and its token will be removed from this phone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Forget')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await widget.prefs.removeConnection(agent);
+    if (mounted) setState(() {});
+  }
+
+  /// Pre-fill the manual form from a saved tile so its token can be changed.
+  void _edit(AgentInfo agent) {
+    _hostController.text = agent.scheme == 'https' ? agent.id : agent.host;
+    _portController.text = '${agent.port}';
+    _tokenController.text = agent.token;
+    setState(() => _connectError = null);
   }
 
   Future<AgentInfo?> _promptToken(AgentInfo base) async {
@@ -110,23 +149,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 labelText: 'Token (optional)',
                 border: OutlineInputBorder(),
               ),
-              onSubmitted: (_) => Navigator.pop(
-                ctx,
-                base.copyWith(token: ctrl.text.trim()),
-              ),
+              onSubmitted: (_) => Navigator.pop(ctx, base.copyWith(token: ctrl.text.trim())),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () => Navigator.pop(
-              ctx,
-              base.copyWith(token: ctrl.text.trim()),
-            ),
+            onPressed: () => Navigator.pop(ctx, base.copyWith(token: ctrl.text.trim())),
             child: const Text('Connect'),
           ),
         ],
@@ -162,6 +192,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final saved = widget.prefs.connections;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Portal'),
@@ -180,6 +211,21 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          // ── Saved connections ────────────────────────────────────
+          if (saved.isNotEmpty) ...[
+            _sectionLabel('Saved connections'),
+            const SizedBox(height: 8),
+            ...saved.map((a) => _SavedTile(
+                  agent: a,
+                  busy: _connectingId == a.id,
+                  enabled: !_connecting,
+                  onTap: () => _connect(a, tileId: a.id),
+                  onEdit: () => _edit(a),
+                  onForget: () => _forget(a),
+                )),
+            const SizedBox(height: 24),
+          ],
+
           // ── Found via mDNS ──────────────────────────────────────
           if (_found.isNotEmpty) ...[
             _sectionLabel('Found on network'),
@@ -190,12 +236,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 title: Text(a.host),
                 subtitle: Text('Port ${a.port}'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  final agent = await _promptToken(a);
-                  if (agent == null || !mounted) return;
-                  await widget.prefs.saveAgent(agent);
-                  if (mounted) _navigate(agent);
-                },
+                onTap: _connecting
+                    ? null
+                    : () async {
+                        final agent = await _promptToken(a);
+                        if (agent == null || !mounted) return;
+                        await _connect(agent);
+                      },
               ),
             )),
             const SizedBox(height: 24),
@@ -265,7 +312,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _connecting ? null : _connectManual,
-            child: _connecting
+            child: _connecting && _connectingId == null
                 ? const SizedBox(
                     height: 18,
                     width: 18,
@@ -296,4 +343,52 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             .labelLarge
             ?.copyWith(color: Theme.of(context).colorScheme.primary),
       );
+}
+
+/// One saved connection. Tap to connect; the menu edits or forgets it.
+class _SavedTile extends StatelessWidget {
+  final AgentInfo agent;
+  final bool busy;
+  final bool enabled;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onForget;
+
+  const _SavedTile({
+    required this.agent,
+    required this.busy,
+    required this.enabled,
+    required this.onTap,
+    required this.onEdit,
+    required this.onForget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final secure = agent.scheme == 'https';
+    return Card(
+      child: ListTile(
+        leading: Icon(secure ? Icons.https : Icons.storage),
+        title: Text(agent.host),
+        subtitle: Text(
+          '${secure ? 'HTTPS · ' : ''}Port ${agent.port} · '
+          '${agent.token.isEmpty ? 'no token' : 'token saved'}',
+        ),
+        trailing: busy
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : PopupMenuButton<String>(
+                onSelected: (v) => v == 'edit' ? onEdit() : onForget(),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit token')),
+                  PopupMenuItem(value: 'forget', child: Text('Forget')),
+                ],
+              ),
+        onTap: enabled ? onTap : null,
+      ),
+    );
+  }
 }

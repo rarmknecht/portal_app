@@ -34,12 +34,14 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
   bool _is401(Object? error) =>
       error is DioException && error.response?.statusCode == 401;
 
+  /// Back to the discovery screen. The connection stays saved as a tile;
+  /// only the auto-resume pointer is cleared so the screen actually shows.
   Future<void> _disconnect() async {
-    await widget.prefs.clearAgent();
+    await widget.prefs.clearLastConnection();
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => DiscoveryScreen(prefs: widget.prefs)),
+      MaterialPageRoute(builder: (_) => DiscoveryScreen(prefs: widget.prefs, autoResume: false)),
     );
   }
 
@@ -84,7 +86,7 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                     Text(
                       auth
                           ? 'The server rejected the request (401). '
-                            'Disconnect and reconnect with the correct token.'
+                            'Go back and use "Edit token" on the saved connection.'
                           : '${snap.error}',
                       style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.center,

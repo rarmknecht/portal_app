@@ -10,7 +10,8 @@ Portal is the Android companion app for the [portal](https://github.com/rarmknec
 
 - **Auto-discovery** — finds the portal agent on your network via mDNS, no IP address needed
 - **Manual connect** — enter host, port, and optional token for Tailscale or non-local setups
-- **Browse** — navigate your media libraries as folder trees, sort by name, date, or size
+- **Saved connections** — every server you have connected to becomes a tile; tap to reconnect
+- **Browse** — navigate your media libraries as folder trees, sort by name, date, or size, as a list or a thumbnail grid
 - **Video** — hardware-accelerated streaming via ExoPlayer
 - **Audio** — background playback with lock-screen controls
 - **Photos** — pinch-zoom viewer with swipe navigation through the folder
@@ -86,9 +87,19 @@ app opts out of Android cloud backup and device-to-device transfer.
 
 ---
 
+## Saved connections
+
+Once a connection succeeds it appears under **Saved connections** on the start screen. Tap the tile to reconnect without retyping anything. The tile's menu offers **Edit token**, which pre-fills the manual form so you can enter a new token for the same server, and **Forget**, which removes the connection and its token from the phone.
+
+At launch the app tries the most recently used connection automatically and goes straight to your libraries if the agent answers.
+
 ## Disconnect / switch server
 
-Tap the **→|** icon in the top-right corner of the Libraries screen to disconnect. The app clears the saved connection and returns to the discovery screen.
+Tap the **→|** icon in the top-right corner of the Libraries screen to disconnect. The connection stays saved as a tile; the app just stops auto-connecting to it and returns to the start screen.
+
+## List and grid view
+
+The grid icon in the folder view switches between the detailed list and a grid of thumbnails. Folders and files without a thumbnail show an icon and name in the grid. The choice is remembered.
 
 ---
 
