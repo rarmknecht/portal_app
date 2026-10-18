@@ -60,6 +60,26 @@ signed with a different key over an existing install.
 
 ---
 
+## Testing against a throwaway server
+
+`tool/test-server.sh` runs a second portal agent that never touches your real
+`~/.portal`: it generates a set of test videos with the timestamp burned into
+every frame (30 s to 90 min, portrait, silent, nested folder) under
+`~/.portal-test/media`, writes its own config, and serves on ports 7843 (media
+API) and 5568 (web UI) so it can run beside your normal server.
+
+```bash
+tool/test-server.sh setup   # generate videos + config (idempotent)
+tool/test-server.sh start   # run the server in the foreground
+tool/test-server.sh token   # print the token to enter in the app
+```
+
+From an Android emulator connect manually to host `10.0.2.2`, port `7843`.
+The script expects the portal checkout (with its `.venv`) at
+`~/projects/portal`; override with `PORTAL_REPO=/path/to/portal`.
+
+---
+
 ## Connecting to your agent
 
 ### Auto-discovery (LAN)

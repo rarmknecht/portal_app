@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import '../api/models.dart';
+import '../widgets/video_seek_bar.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final List<DirEntry> siblings;
@@ -116,12 +117,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _controller.setPlaybackSpeed(speed);
   }
 
-  String _fmt(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -153,7 +148,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             speed: _playbackSpeed,
                             speeds: _speeds,
                             onSpeedChanged: _setSpeed,
-                            fmt: _fmt,
                             currentIndex: _currentIndex,
                             total: _videos.length,
                           ),
@@ -230,7 +224,6 @@ class _Controls extends StatelessWidget {
   final double speed;
   final List<double> speeds;
   final void Function(double) onSpeedChanged;
-  final String Function(Duration) fmt;
   final int currentIndex;
   final int total;
 
@@ -240,10 +233,19 @@ class _Controls extends StatelessWidget {
     required this.speed,
     required this.speeds,
     required this.onSpeedChanged,
-    required this.fmt,
     required this.currentIndex,
     required this.total,
   });
+
+  static const _skip = Duration(seconds: 10);
+
+  void _seekBy(Duration delta) {
+    var target = controller.value.position + delta;
+    final dur = controller.value.duration;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > dur) target = dur;
+    controller.seekTo(target);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -296,32 +298,61 @@ class _Controls extends StatelessWidget {
             SafeArea(
               top: false,
               child: Column(children: [
-                VideoProgressIndicator(controller,
-                    allowScrubbing: true,
-                    colors: const VideoProgressColors(
-                        playedColor: Colors.white)),
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: VideoSeekBar(
+                    position: pos,
+                    duration: dur,
+                    buffered: controller.value.buffered,
+                    onSeek: controller.seekTo,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(fmt(pos),
-                          style: const TextStyle(color: Colors.white)),
-                      IconButton(
-                        icon: Icon(
-                          controller.value.isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                          color: Colors.white,
-                          size: 36,
+                      Text(formatDuration(pos),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontFeatures: [FontFeature.tabularFigures()])),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              tooltip: 'Back 10 seconds',
+                              icon: const Icon(Icons.replay_10,
+                                  color: Colors.white, size: 32),
+                              onPressed: () => _seekBy(-_skip),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: controller.value.isPlaying ? 'Pause' : 'Play',
+                              icon: Icon(
+                                controller.value.isPlaying
+                                    ? Icons.pause
+                                    : Icons.play_arrow,
+                                color: Colors.white,
+                                size: 40,
+                              ),
+                              onPressed: () => controller.value.isPlaying
+                                  ? controller.pause()
+                                  : controller.play(),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: 'Forward 10 seconds',
+                              icon: const Icon(Icons.forward_10,
+                                  color: Colors.white, size: 32),
+                              onPressed: () => _seekBy(_skip),
+                            ),
+                          ],
                         ),
-                        onPressed: () => controller.value.isPlaying
-                            ? controller.pause()
-                            : controller.play(),
                       ),
-                      Text(fmt(dur),
-                          style: const TextStyle(color: Colors.white)),
+                      Text(formatDuration(dur),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontFeatures: [FontFeature.tabularFigures()])),
                     ],
                   ),
                 ),
